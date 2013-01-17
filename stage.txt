@@ -7,5 +7,3 @@ size
 tiles_tab
 
 "stage":{"layers":[{"filename":"fond.png", "priority":"0", "speed":{"x":"1", "y":"1"}}]}
-
-Salut !
