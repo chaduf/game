@@ -1,6 +1,6 @@
 import pygame, sys
 from pygame.locals import *
-
+#hello
 class Layer():
               """This class is supposed to display a layer and allow scrolling"""
               def __init__(self, screen, img_filename, scrolling_speed = (1,1), top_priority=False):
