@@ -1,0 +1,11 @@
+Stage
+layers_img_filenames, speed, and priorities
+
+tiles_filename
+
+size
+tiles_tab
+
+"stage":{"layers":[{"filename":"fond.png", "priority":"0", "speed":{"x":"1", "y":"1"}}]}
+
+Salut !
