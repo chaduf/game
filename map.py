@@ -2,6 +2,23 @@ import pygame, sys
 import json
 from pygame.locals import *
 
+# Global variables
+controls = {"down":pygame.K_DOWN, "right":pygame.K_RIGHT, "up":pygame.K_UP, "left":pygame.K_LEFT}
+
+class EventListener():
+              listeners = []
+
+              def __init__(self):
+                            EventListener.listeners.append(self)
+
+              @staticmethod
+              def listen_all(event):
+                            try:
+                                          for listener in EventListener.listeners:
+                                                        listener.on_event(event)
+                            except Exception as e:
+                                          print ("Error in EventListener Class :\n!!! %s !!!")%e
+
 class Layer():
               """This class is supposed to display a layer and allow scrolling"""
               def __init__(self, screen, img_filename, scrolling_speed = (1,1), top_priority=False):
@@ -24,10 +41,8 @@ class Layer():
 
               #displaying the right part
               def display(self, coordinates):
-                            #print(self.scrolling_speed)
                             x = (int)(coordinates[0]*self.scrolling_speed[0])
                             y = (int)(coordinates[1]*self.scrolling_speed[1])
-                            print (x,y)
                             w = self.virtual_width
                             h  = self.virtual_height
                             dispx = x - w*(x/w) 
@@ -45,7 +60,10 @@ class Stage():
                             self.layers = []
                             self.entities = []
                             self.tiles = []
+                            self.characters = []
+                            self.main_character = None
 
+                            #parsing the stage file and building the stage
                             try:
                                           stage_file = open(stage_filename)
                                           json_stage = json.loads(stage_file.read())
@@ -78,8 +96,8 @@ class Stage():
                                                         
                             except IOError as e:
                                           print ("cannot open file \n!!! %s !!!")%e
-                            #except Exception as e:
-                            #              print ("Exception :\n!!! %s !!!")%e
+                            except Exception as e:
+                                          print ("Exception :\n!!! %s !!!")%e
                             finally :
                                           stage_file.close()
                             
@@ -95,6 +113,34 @@ class Stage():
                             self.tiles += tiles
                             self.entities += tiles
 
+              def add_characters(self, characters):
+                            self.characters += characters
+                            self.entities += characters
+                            
+              def remove_tile(self, tile):
+                            try:
+                                          self.tiles.remove(tile)
+                                          self.entities.remove(tile)
+                            except ValueError as e:
+                                          print ("Cannot remove : his tile is not in this stage :\n!!! %s !!!")%e
+
+              def remove_character(self, character):
+                            try:
+                                          self.characteres.remove(characters)
+                                          self.entities.remove(characters)
+                                          if character == self.main_character:
+                                                        self.main_character = None
+                            except ValueError as e:
+                                          print ("Cannot remove : this character is not in this stage :\n!!! %s !!!")%e
+
+              def set_main_character(self, character):
+                            try:
+                                          index = self.characters.index(character)
+                                          self.main_character = self.characters[index]
+                            except ValueError as e:
+                                          print ("This character is not in this stage :\n!!! %s !!!")%e
+                            
+                            
               #position of the camera
               def set_camera(self, position):
                             xmin = self.screen.get_width()/2
@@ -123,25 +169,24 @@ class Stage():
                                           layer.display(self.camera)
 
                             for entity in self.entities:
+                                          if entity == self.main_character:
+                                                        self.set_camera(entity.position)
+                                                        print [entity.speed, entity.accel]
+                                                        
                                           entity.update()
                                           
 
 
 
 class Entity(pygame.sprite.Sprite):
-              def __init__(self, stage, img_filename, rect_list, rect_id, hitbox=None, ghostmode=False, start_position=[0,0], priority=0):
+              def __init__(self, stage, img_filename, rect_list, hitbox=None, ghostmode=False, start_position=[0,0], priority=0):
                             self.stage = stage
                             self.image = pygame.image.load(img_filename).convert_alpha()
                             self.rect_list = rect_list
-                            
-                            self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
                             self.hitbox = hitbox
                             self.ghostmode = ghostmode
                             self.position = start_position
                             self.priority = priority
-                            
-              def set_displayed_surf(self, rect_id):
-                            self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
 
               def set_position(self, position):
                             self.position = position
@@ -149,46 +194,112 @@ class Entity(pygame.sprite.Sprite):
               def set_hitbox(self, hitbox):
                             self.hitbox = hitbox
                             
-              def display(self):
-                            #definition of the limits in which the entity can be displayed
-                            xmin = self.stage.camera[0] - self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                            xmax = self.stage.camera[0] + self.stage.screen.get_width()/2 + self.displayed_surf.get_width()/2
-                            ymin = self.stage.camera[1] - self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
-                            ymax = self.stage.camera[1] + self.stage.screen.get_height()/2 + self.displayed_surf.get_height()/2
-                            if (self.position[0] > xmin and self.position[0] < xmax and
-                                self.position[1] > ymin and self.position[1] < ymax):
-                                          x = self.position[0] - self.stage.camera[0] + self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                                          y = self.position[1] - self.stage.camera[1] + self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
-
-                                          pygame.Surface.blit(self.stage.screen, self.displayed_surf, (x,y))
+              def delete(self):
+                            self.stage.remove(self)
 
 
 class Tile(Entity):
               def __init__(self, stage, img_filename, rect_list, rect_id, hitbox=None, ghostmode=False, position=[0, 0], priority=0):
-                            Entity.__init__(self, stage, img_filename, rect_list, rect_id, hitbox, ghostmode, position)
+                            Entity.__init__(self, stage, img_filename, rect_list, hitbox, ghostmode, position)
+                            self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
+
+              def set_displayed_surf(self, rect_id):
+                            self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
+
+              def display(self):
+                            try:
+                                          #definition of the limits in which the entity can be displayed
+                                          xmin = self.stage.camera[0] - self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
+                                          xmax = self.stage.camera[0] + self.stage.screen.get_width()/2 + self.displayed_surf.get_width()/2
+                                          ymin = self.stage.camera[1] - self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+                                          ymax = self.stage.camera[1] + self.stage.screen.get_height()/2 + self.displayed_surf.get_height()/2
+                                          if (self.position[0] > xmin and self.position[0] < xmax and
+                                              self.position[1] > ymin and self.position[1] < ymax):
+                                                        x = self.position[0] - self.stage.camera[0] + self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
+                                                        y = self.position[1] - self.stage.camera[1] + self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+
+                                                        pygame.Surface.blit(self.stage.screen, self.displayed_surf, (x,y))
+                            except Exception as e:
+                                          print ("Cannot blit displayed_surf :\n!!! %s !!!")%e
 
               def update(self):
-                            Entity.display(self)
+                            self.display()
               
 
 		
-##class Character(Entity):
-##	def __init__(self, screen, image, ghostmode=True, thrust=10, weight=10):
-##		Entity.__init__(self, screen, image, ghostmode=ghostmode):
-##		self.speed = (0,0)
-##		self.accel = (0,0)
-##		self.thrust = 10
-##
+class Character(Entity, EventListener):
+              def __init__(self, stage, img_filename, rect_list, hitbox=None, ghostmode=False, start_position=[0,0], priority=0):
+                            EventListener.__init__(self)
+                            Entity.__init__(self, stage, img_filename, rect_list, hitbox, ghostmode, start_position)
+                            self.brut_accel = [0,0]
+                            self.speed = [0,0]
+                            self.accel = [0,0]
+                            self.position = start_position
 
+                            ## TODO : make a way to enter them
+                            self.cx = 1
+                            self.thrust = 40
+                            self.weight = 20
 
-	
+                            self.displayed_surf = self.image.subsurface(self.rect_list[0])
+
+              def on_event(self, event):
+                            if event.type == pygame.KEYDOWN:
+                                          if event.key == controls['down']:
+                                                        self.brut_accel[1] += self.thrust
+                                          if event.key == controls['up']:
+                                                        self.brut_accel[1] -= self.thrust
+                                          if event.key == controls['right']:
+                                                        self.brut_accel[0] += self.thrust
+                                          if event.key == controls['left']:
+                                                        self.brut_accel[0] -= self.thrust
+                            if event.type == pygame.KEYUP:
+                                          if event.key == controls['down']:
+                                                        self.brut_accel[1] -= self.thrust
+                                          if event.key == controls['up']:
+                                                        self.brut_accel[1] += self.thrust
+                                          if event.key == controls['right']:
+                                                        self.brut_accel[0] -= self.thrust
+                                          if event.key == controls['left']:
+                                                        self.brut_accel[0] += self.thrust
+
+              def display(self):
+                            try:
+                                           #definition of the limits in which the entity can be displayed
+                                          xmin = self.stage.camera[0] - self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
+                                          xmax = self.stage.camera[0] + self.stage.screen.get_width()/2 + self.displayed_surf.get_width()/2
+                                          ymin = self.stage.camera[1] - self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+                                          ymax = self.stage.camera[1] + self.stage.screen.get_height()/2 + self.displayed_surf.get_height()/2
+                                          if (self.position[0] > xmin and self.position[0] < xmax and
+                                              self.position[1] > ymin and self.position[1] < ymax):
+                                                        x = self.position[0] - self.stage.camera[0] + self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
+                                                        y = self.position[1] - self.stage.camera[1] + self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+
+                                                        pygame.Surface.blit(self.stage.screen, self.displayed_surf, (x,y))
+                            except Exception as e:
+                                          print ("Cannot blit displayed_surf :\n!!! %s !!!")%e
+              
+              def move(self):
+                            self.accel[0] = (self.brut_accel[0] - self.speed[0]*self.cx)/(float)(self.weight)
+                            self.accel[1] = (self.brut_accel[1] - self.speed[1]*self.cx)/(float)(self.weight)
+                            self.speed[0] += self.accel[0]
+                            self.speed[1] += self.accel[1]
+                            self.position[0] += (int)(self.speed[0])
+                            self.position[1] += (int)(self.speed[1])
+
+              def update(self):
+                            self.move()
+                            self.display()
 
 pygame.init()
 
-screen = pygame.display.set_mode((640, 400), pygame.DOUBLEBUF, 32)
+screen = pygame.display.set_mode((960, 600), pygame.DOUBLEBUF, 32)
 clock = pygame.time.Clock()
 
 carte = Stage(screen, "stage.txt")
+perso = Character(carte, "tile.png", [(0,0,100,100),(100,0,100,100),(200,0,100,100),(300,0,100,100)])
+carte.add_characters([perso])
+carte.set_main_character(perso)
 x=0
 y=0
 
@@ -199,17 +310,8 @@ while(True):
                             if event.type == pygame.QUIT:
                                           pygame.quit()
                                           sys.exit()
-                            if event.type == pygame.KEYDOWN:
-                                          if event.key == pygame.K_DOWN:
-                                                        y = y + 10
-                                          elif event.key == pygame.K_UP:
-                                                        y = y - 10
-                                          elif event.key == pygame.K_LEFT:
-                                                        x = x - 10
-                                          elif event.key == pygame.K_RIGHT:
-                                                        x = x + 10
-              carte.set_camera([x, y])
-              carte.set_camera([x, y])
+                            EventListener.listen_all(event)
+                            
               carte.update()
               pygame.display.flip()
 
