@@ -21,28 +21,46 @@ class EventListener():
 
 class Layer():
               """This class is supposed to display a layer and allow scrolling"""
-              def __init__(self, screen, img_filename, scrolling_speed = (1,1), top_priority=False):
-                            self.scrolling_speed = scrolling_speed
-                            self.screen = screen
-                            self.top_priority = top_priority
+              def __init__(self, screen, img_filename, scrolling_speed = (1,1), top_priority=False, scale=1):
+                            self.scrolling_speed = scrolling_speed # the speed of scrolling in pixels/frame
+                            self.screen = screen # the screen
+                            self.top_priority = top_priority #it will be displayed in foreground if True
+                            self.scale = scale # ratio
 
-                            img = pygame.image.load(img_filename).convert_alpha()
+                            self.img = pygame.image.load(img_filename).convert_alpha()
 
-                            self.virtual_width = (screen.get_width()/img.get_width()+1)*img.get_width()
-                            self.virtual_height = (screen.get_height()/img.get_height()+1)*img.get_height()
+                            self.virtual_width = (screen.get_width()/self.img.get_width()+1)*self.img.get_width()
+                            self.virtual_height = (screen.get_height()/self.img.get_height()+1)*self.img.get_height()
                             self.width = screen.get_width() + self.virtual_width
                             self.height = screen.get_height() + self.virtual_height
                             self.panel = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
 
                             #construction of a big panel in order to make scrolling possible and infinite
-                            for i in range(0, self.panel.get_width(), img.get_width()):
-                                          for j in range(0, self.panel.get_height(), img.get_height()):
-                                                        pygame.Surface.blit(self.panel, img, (i, j))
+                            for i in range(0, self.panel.get_width(), self.img.get_width()):
+                                          for j in range(0, self.panel.get_height(), self.img.get_height()):
+                                                        pygame.Surface.blit(self.panel, self.img, (i, j))
 
+              def set_scale(self, scale):
+                            self.scale = scale
+                            new_img_width = (int)(self.img.get_width()*scale)
+                            new_img_height = (int)(self.img.get_height()*scale)
+                            self.scaled_img = pygame.transform.scale(self.img, (new_img_width, new_img_height))                   
+                            
+                            self.virtual_width = (screen.get_width()/self.scaled_img.get_width()+1)*self.scaled_img.get_width()
+                            self.virtual_height = (screen.get_height()/self.scaled_img.get_height()+1)*self.scaled_img.get_height()
+                            self.width = screen.get_width() + self.virtual_width
+                            self.height = screen.get_height() + self.virtual_height
+                            self.panel = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+
+                            #construction of a big panel in order to make scrolling possible and infinite
+                            for i in range(0, self.panel.get_width(), self.scaled_img.get_width()):
+                                          for j in range(0, self.panel.get_height(), self.scaled_img.get_height()):
+                                                        pygame.Surface.blit(self.panel, self.scaled_img, (i, j))
+              
               #displaying the right part
               def display(self, coordinates):
-                            x = (int)(coordinates[0]*self.scrolling_speed[0])
-                            y = (int)(coordinates[1]*self.scrolling_speed[1])
+                            x = (int)(coordinates[0]*self.scrolling_speed[0]*self.scale)
+                            y = (int)(coordinates[1]*self.scrolling_speed[1]*self.scale)
                             w = self.virtual_width
                             h  = self.virtual_height
                             dispx = x - w*(x/w) 
@@ -54,8 +72,9 @@ class Layer():
                             
 
 class Stage():
-              def __init__(self, screen, stage_filename, camera=None):
+              def __init__(self, screen, stage_filename, camera=None, scale=1):
                             self.screen = screen
+                            self.scale = scale
 
                             self.layers = []
                             self.entities = []
@@ -75,7 +94,7 @@ class Stage():
                                                                       top_priority = True
                                                         else:
                                                                       top_priority = False
-                                                        self.layers.append(Layer(self.screen, layer_img_filename, layer['speed'], top_priority))
+                                                        self.layers.append(Layer(self.screen, layer_img_filename, layer['speed'], top_priority, scale))
 
                                           tiles_list = []
                                           tile_img_filename = json_stage['tiles']['filename']
@@ -89,15 +108,15 @@ class Stage():
                                                         tile_priority = tile['priority']
                                                         tile_rect_id = tile['rect_id']
                                                         tile_position = tile['position']
-                                                        tiles_list.append(Tile(self, tile_img_filename, tile_rect_list, tile_rect_id, position=tile_position, ghostmode=tile_ghostmode, priority=tile_priority))
+                                                        tiles_list.append(Tile(self, tile_img_filename, tile_rect_list, tile_rect_id, position=tile_position, ghostmode=tile_ghostmode, priority=tile_priority, scale=scale))
                                                         
                                           self.tiles += tiles_list
                                           self.entities += tiles_list
                                                         
                             except IOError as e:
                                           print ("cannot open file \n!!! %s !!!")%e
-                            except Exception as e:
-                                          print ("Exception :\n!!! %s !!!")%e
+                            #except Exception as e:
+                            #             print ("Exception :\n!!! %s !!!")%e
                             finally :
                                           stage_file.close()
                             
@@ -139,14 +158,22 @@ class Stage():
                                           self.main_character = self.characters[index]
                             except ValueError as e:
                                           print ("This character is not in this stage :\n!!! %s !!!")%e
+
+              def set_scale(self, scale):
+                            self.scale = scale
+                            for layer in self.layers:
+                                          layer.set_scale(scale)
+
+                            for entity in self.entities:
+                                          entity.set_scale(scale)
                             
                             
               #position of the camera
               def set_camera(self, position):
-                            xmin = self.screen.get_width()/2
-                            xmax = self.size[0] - self.screen.get_width()/2
-                            ymin = self.screen.get_height()/2
-                            ymax = self.size[1] - self.screen.get_height()/2
+                            xmin = (int)((self.screen.get_width()/2)/self.scale)
+                            xmax = self.size[0] - (int)((self.screen.get_width()/2)/self.scale)
+                            ymin = (int)((self.screen.get_height()/2)/self.scale)
+                            ymax = self.size[1] - (int)((self.screen.get_height()/2)/self.scale)
 
                             #setting x position
                             if (position[0] < xmin):
@@ -163,7 +190,7 @@ class Stage():
                                           self.camera[1] = ymax
                             else:
                                           self.camera[1] = position[1]
-
+              
               def update(self):
                             for layer in self.layers:
                                           layer.display(self.camera)
@@ -171,15 +198,14 @@ class Stage():
                             for entity in self.entities:
                                           if entity == self.main_character:
                                                         self.set_camera(entity.position)
-                                                        print [entity.speed, entity.accel]
+                                                        #print [entity.speed, entity.accel]
                                                         
                                           entity.update()
-                                          
 
 
 
 class Entity(pygame.sprite.Sprite):
-              def __init__(self, stage, img_filename, rect_list, hitbox=None, ghostmode=False, start_position=[0,0], priority=0):
+              def __init__(self, stage, img_filename, rect_list, hitbox=None, ghostmode=False, start_position=[0,0], priority=0, scale=1):
                             self.stage = stage
                             self.image = pygame.image.load(img_filename).convert_alpha()
                             self.rect_list = rect_list
@@ -187,6 +213,13 @@ class Entity(pygame.sprite.Sprite):
                             self.ghostmode = ghostmode
                             self.position = start_position
                             self.priority = priority
+                            self.scale = 1
+
+              def set_scale(self, scale):
+                            raise NotImplementedError
+              
+              def display(self):
+                            raise NotImplementedError
 
               def set_position(self, position):
                             self.position = position
@@ -199,29 +232,42 @@ class Entity(pygame.sprite.Sprite):
 
 
 class Tile(Entity):
-              def __init__(self, stage, img_filename, rect_list, rect_id, hitbox=None, ghostmode=False, position=[0, 0], priority=0):
-                            Entity.__init__(self, stage, img_filename, rect_list, hitbox, ghostmode, position)
+              def __init__(self, stage, img_filename, rect_list, rect_id, hitbox=None, ghostmode=False, position=[0, 0], priority=0, scale=1):
+                            Entity.__init__(self, stage, img_filename, rect_list, hitbox, ghostmode, position, scale)
                             self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
+
+                            new_width = self.displayed_surf.get_width()*self.scale
+                            new_height = self.displayed_surf.get_height()*self.scale
+                            self.scaled_displayed_surf = pygame.transform.scale(self.displayed_surf, (new_width, new_height))
 
               def set_displayed_surf(self, rect_id):
                             self.displayed_surf = self.image.subsurface(self.rect_list[rect_id])
 
+              def set_scale(self, scale):
+                            self.scale = scale
+
               def display(self):
                             try:
                                           #definition of the limits in which the entity can be displayed
-                                          xmin = self.stage.camera[0] - self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                                          xmax = self.stage.camera[0] + self.stage.screen.get_width()/2 + self.displayed_surf.get_width()/2
-                                          ymin = self.stage.camera[1] - self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
-                                          ymax = self.stage.camera[1] + self.stage.screen.get_height()/2 + self.displayed_surf.get_height()/2
-                                          if (self.position[0] > xmin and self.position[0] < xmax and
-                                              self.position[1] > ymin and self.position[1] < ymax):
-                                                        x = self.position[0] - self.stage.camera[0] + self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                                                        y = self.position[1] - self.stage.camera[1] + self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+                                          new_width = (int)(self.displayed_surf.get_width()*self.scale)
+                                          new_height = (int)(self.displayed_surf.get_height()*self.scale)
+                                          self.scaled_displayed_surf = pygame.transform.scale(self.displayed_surf, (new_width, new_height))
+                                          
+                                          xmin = (int)(self.stage.camera[0]*self.scale) - self.stage.screen.get_width()/2 - self.scaled_displayed_surf.get_width()/2
+                                          xmax = (int)(self.stage.camera[0]*self.scale) + self.stage.screen.get_width()/2 + self.scaled_displayed_surf.get_width()/2
+                                          ymin = (int)(self.stage.camera[1]*self.scale) - self.stage.screen.get_height()/2 - self.scaled_displayed_surf.get_height()/2
+                                          ymax = (int)(self.stage.camera[1]*self.scale) + self.stage.screen.get_height()/2 + self.scaled_displayed_surf.get_height()/2
+                                          if ((int)(self.position[0]*self.scale) > xmin and (int)(self.position[0]*self.scale) < xmax and
+                                              (int)(self.position[1]*self.scale) > ymin and (int)(self.position[1]*self.scale) < ymax):
+                                                        x = (int)(self.position[0]*self.scale) - (int)(self.stage.camera[0]*self.scale) + self.stage.screen.get_width()/2 - self.scaled_displayed_surf.get_width()/2
+                                                        y = (int)(self.position[1]*self.scale) - (int)(self.stage.camera[1]*self.scale) + self.stage.screen.get_height()/2 - self.scaled_displayed_surf.get_height()/2
 
-                                                        pygame.Surface.blit(self.stage.screen, self.displayed_surf, (x,y))
+                                                        pygame.Surface.blit(self.stage.screen, self.scaled_displayed_surf, (x,y))
                             except Exception as e:
                                           print ("Cannot blit displayed_surf :\n!!! %s !!!")%e
 
+              
+                            
               def update(self):
                             self.display()
               
@@ -263,19 +309,27 @@ class Character(Entity, EventListener):
                                           if event.key == controls['left']:
                                                         self.brut_accel[0] += self.thrust
 
+              def set_scale(self, scale):
+                            self.scale = scale
+
               def display(self):
                             try:
-                                           #definition of the limits in which the entity can be displayed
-                                          xmin = self.stage.camera[0] - self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                                          xmax = self.stage.camera[0] + self.stage.screen.get_width()/2 + self.displayed_surf.get_width()/2
-                                          ymin = self.stage.camera[1] - self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
-                                          ymax = self.stage.camera[1] + self.stage.screen.get_height()/2 + self.displayed_surf.get_height()/2
-                                          if (self.position[0] > xmin and self.position[0] < xmax and
-                                              self.position[1] > ymin and self.position[1] < ymax):
-                                                        x = self.position[0] - self.stage.camera[0] + self.stage.screen.get_width()/2 - self.displayed_surf.get_width()/2
-                                                        y = self.position[1] - self.stage.camera[1] + self.stage.screen.get_height()/2 - self.displayed_surf.get_height()/2
+                                          #definition of the limits in which the entity can be displayed
+                                          new_width = (int)(self.displayed_surf.get_width()*self.scale)
+                                          new_height = (int)(self.displayed_surf.get_height()*self.scale)
+                                          self.scaled_displayed_surf = pygame.transform.scale(self.displayed_surf, (new_width, new_height))
+                                          
+                                          xmin = (int)(self.stage.camera[0]*self.scale) - self.stage.screen.get_width()/2 - self.scaled_displayed_surf.get_width()/2
+                                          xmax = (int)(self.stage.camera[0]*self.scale) + self.stage.screen.get_width()/2 + self.scaled_displayed_surf.get_width()/2
+                                          ymin = (int)(self.stage.camera[1]*self.scale) - self.stage.screen.get_height()/2 - self.scaled_displayed_surf.get_height()/2
+                                          ymax = (int)(self.stage.camera[1]*self.scale) + self.stage.screen.get_height()/2 + self.scaled_displayed_surf.get_height()/2
+                                          if ((int)(self.position[0]*self.scale) > xmin and (int)(self.position[0]*self.scale) < xmax and
+                                              (int)(self.position[1]*self.scale) > ymin and (int)(self.position[1]*self.scale) < ymax):
+                                                        x = (int)(self.position[0]*self.scale) - (int)(self.stage.camera[0]*self.scale) + self.stage.screen.get_width()/2 - self.scaled_displayed_surf.get_width()/2
+                                                        y = (int)(self.position[1]*self.scale) - (int)(self.stage.camera[1]*self.scale) + self.stage.screen.get_height()/2 - self.scaled_displayed_surf.get_height()/2
 
-                                                        pygame.Surface.blit(self.stage.screen, self.displayed_surf, (x,y))
+                                                        pygame.Surface.blit(self.stage.screen, self.scaled_displayed_surf, (x,y))
+
                             except Exception as e:
                                           print ("Cannot blit displayed_surf :\n!!! %s !!!")%e
               
@@ -302,6 +356,7 @@ carte.add_characters([perso])
 carte.set_main_character(perso)
 x=0
 y=0
+scale = 1
 
 while(True):
               time_passed = clock.tick(50)
@@ -310,6 +365,12 @@ while(True):
                             if event.type == pygame.QUIT:
                                           pygame.quit()
                                           sys.exit()
+
+                            if event.type == pygame.KEYDOWN:
+                                          if event.key == pygame.K_a:
+                                                        print("a push")
+                                                        scale -= 0.02
+                                                        carte.set_scale(scale)
                             EventListener.listen_all(event)
                             
               carte.update()
